@@ -68,6 +68,7 @@ def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=
 
     erbs = np.flipud(calc_erbs(low_freq, fs, n_cochlear_filters))
 
+    frame_energy = energy
     avg_energy = np.mean(energy, axis=2)
     total_energy = np.sum(avg_energy)
 
@@ -90,7 +91,7 @@ def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=
     elif (BW > cutoffs[7]):
         Kstar=8
 
-    return np.sum(avg_energy[:, :4])/np.sum(avg_energy[:, 4:Kstar]), np.sum(avg_energy[:, :4], axis=1)/np.sum(avg_energy[:, 4:Kstar], axis=1)
+    return np.sum(avg_energy[:, :4])/np.sum(avg_energy[:, 4:Kstar]), np.sum(frame_energy[:, :4, :], axis=-1).flatten()/np.sum(frame_energy[:, 4:Kstar, :], axis=-1).flatten()
 
 def process_file(f, args):
     fs, s = readwav(f)
