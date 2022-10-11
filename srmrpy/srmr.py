@@ -38,9 +38,7 @@ def normalize_energy(energy, drange=30.0):
     energy[energy > peak_energy] = peak_energy
     return energy
 
-def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False):
-    wLengthS = .256
-    wIncS = .064
+def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False, wLength=1024, wInc=256):
     # Computing gammatone envelopes
     if fast:
         mfs = 400.0
@@ -95,7 +93,7 @@ def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=
     elif (BW > cutoffs[7]):
         Kstar=8
 
-    return np.sum(avg_energy[:, :4])/np.sum(avg_energy[:, 4:Kstar]), energy
+    return np.sum(avg_energy[:, :4])/np.sum(avg_energy[:, 4:Kstar]), np.sum(avg_energy[:, :4], axis=1)/np.sum(avg_energy[:, 4:Kstar], axis=1)
 
 def process_file(f, args):
     fs, s = readwav(f)
