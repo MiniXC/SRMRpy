@@ -6,9 +6,11 @@
 
 from __future__ import division
 import numpy as np
+from functools import lru_cache
 from scipy.signal import hamming
 from srmrpy.hilbert import hilbert
 from srmrpy.modulation_filters import *
+from nnAudio.features.gammatone import Gammatonegram
 from gammatone.fftweight import fft_gtgram
 from gammatone.filters import centre_freqs, make_erb_filters, erb_filterbank
 from srmrpy.segmentaxis import segment_axis
@@ -38,13 +40,25 @@ def normalize_energy(energy, drange=30.0):
     energy[energy > peak_energy] = peak_energy
     return energy
 
-def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False):
+
+@lru_cache(maxsize=None)
+def get_gm(n_bins, fs, n_fft, hop_length, win_length, fmin, fmax):
+    return Gammatonegram(n_bins=n_bins, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=fmin, fmax=fmax, power=1, norm=1, center=False)
+
+def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, faster=False, norm=False):
     wLengthS = .256
     wIncS = .064
     # Computing gammatone envelopes
-    if fast:
+    if fast and not faster:
         mfs = 400.0
         gt_env = fft_gtgram(x, fs, 0.010, 0.0025, n_cochlear_filters, low_freq)
+    elif faster:
+        mfs = 400.0
+        n_fft = int(2 ** (np.ceil(np.log2(2 * 0.010 * fs))))
+        hop_length = int(np.ceil(0.0025*fs))
+        win_length = int(np.ceil(0.010*fs))
+        gm = get_gm(n_cochlear_filters, fs, n_fft, hop_length, win_length, low_freq, fs/2)
+        gt_env = (gm(x)).squeeze(0).numpy()
     else:
         cfs = centre_freqs(fs, n_cochlear_filters, low_freq)
         fcoefs = make_erb_filters(fs, cfs)
@@ -57,6 +71,7 @@ def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=
     # Computing modulation filterbank with Q = 2 and 8 channels
     mod_filter_cfs = compute_modulation_cfs(min_cf, max_cf, 8)
     MF = modulation_filterbank(mod_filter_cfs, mfs, 2)
+    
 
     n_frames = int(1 + (gt_env.shape[1] - wLength)//wInc)
     w = hamming(wLength+1)[:-1] # window is periodic, not symmetric
