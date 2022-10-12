@@ -40,11 +40,6 @@ def normalize_energy(energy, drange=30.0):
     energy[energy > peak_energy] = peak_energy
     return energy
 
-
-@lru_cache(maxsize=None)
-def get_gm(n_bins, fs, n_fft, hop_length, win_length, fmin, fmax):
-    return Gammatonegram(n_bins=n_bins, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=fmin, fmax=fmax, power=1, norm=1, center=False)
-
 class SRMR():
     def __init__(self, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, faster=False, norm=False):
         n_fft = int(2 ** (np.ceil(np.log2(2 * 0.010 * fs))))
@@ -58,7 +53,7 @@ class SRMR():
         self.fast = fast
         self.faster = faster
         self.norm = norm
-        self.gm = Gammatonegram(n_bins=n_bins, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=low_freq, fmax=fs/2, power=1, norm=1, center=False)
+        self.gm = Gammatonegram(n_bins=n_cochlear_filters, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=low_freq, fmax=fs/2, power=1, norm=1, center=False)
 
     def srmr(x):
         # previous args
