@@ -45,73 +45,94 @@ def normalize_energy(energy, drange=30.0):
 def get_gm(n_bins, fs, n_fft, hop_length, win_length, fmin, fmax):
     return Gammatonegram(n_bins=n_bins, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=fmin, fmax=fmax, power=1, norm=1, center=False)
 
-def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, faster=False, norm=False):
-    wLengthS = .256
-    wIncS = .064
-    # Computing gammatone envelopes
-    if fast and not faster:
-        mfs = 400.0
-        gt_env = fft_gtgram(x, fs, 0.010, 0.0025, n_cochlear_filters, low_freq)
-    elif faster:
-        mfs = 400.0
+class SRMR():
+    def __init__(self, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, faster=False, norm=False):
         n_fft = int(2 ** (np.ceil(np.log2(2 * 0.010 * fs))))
         hop_length = int(np.ceil(0.0025*fs))
         win_length = int(np.ceil(0.010*fs))
-        gm = get_gm(n_cochlear_filters, fs, n_fft, hop_length, win_length, low_freq, fs/2)
-        gt_env = (gm(x)).squeeze(0).numpy()
-    else:
-        cfs = centre_freqs(fs, n_cochlear_filters, low_freq)
-        fcoefs = make_erb_filters(fs, cfs)
-        gt_env = np.abs(hilbert(erb_filterbank(x, fcoefs)))
-        mfs = fs
+        self.fs = fs
+        self.n_cochlear_filters = n_cochlear_filters
+        self.low_freq = low_freq
+        self.min_cf = min_cf
+        self.max_cf = max_cf
+        self.fast = fast
+        self.faster = faster
+        self.norm = norm
+        self.gm = Gammatonegram(n_bins=n_bins, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=low_freq, fmax=fs/2, power=1, norm=1, center=False)
+
+    def srmr(x):
+        # previous args
+        fs=self.fs
+        n_cochlear_filters=self.n_cochlear_filters
+        low_freq=self.low_freq
+        min_cf=self.min_cf
+        max_cf=self.max_cf
+        fast=self.fast
+        faster=self.faster
+        norm=self.norm
         
-    wLength = int(np.ceil(wLengthS*mfs))
-    wInc = int(np.ceil(wIncS*mfs))
+        wLengthS = .256
+        wIncS = .064
+        # Computing gammatone envelopes
+        if fast and not faster:
+            mfs = 400.0
+            gt_env = fft_gtgram(x, fs, 0.010, 0.0025, n_cochlear_filters, low_freq)
+        elif faster:
+            mfs = 400.0
+            gt_env = self.gm(x).squeeze(0).numpy()
+        else:
+            cfs = centre_freqs(fs, n_cochlear_filters, low_freq)
+            fcoefs = make_erb_filters(fs, cfs)
+            gt_env = np.abs(hilbert(erb_filterbank(x, fcoefs)))
+            mfs = fs
 
-    # Computing modulation filterbank with Q = 2 and 8 channels
-    mod_filter_cfs = compute_modulation_cfs(min_cf, max_cf, 8)
-    MF = modulation_filterbank(mod_filter_cfs, mfs, 2)
-    
+        wLength = int(np.ceil(wLengthS*mfs))
+        wInc = int(np.ceil(wIncS*mfs))
 
-    n_frames = int(1 + (gt_env.shape[1] - wLength)//wInc)
-    w = hamming(wLength+1)[:-1] # window is periodic, not symmetric
+        # Computing modulation filterbank with Q = 2 and 8 channels
+        mod_filter_cfs = compute_modulation_cfs(min_cf, max_cf, 8)
+        MF = modulation_filterbank(mod_filter_cfs, mfs, 2)
 
-    energy = np.zeros((n_cochlear_filters, 8, n_frames))
-    for i, ac_ch in enumerate(gt_env):
-        mod_out = modfilt(MF, ac_ch)
-        for j, mod_ch in enumerate(mod_out):
-            mod_out_frame = segment_axis(mod_ch, wLength, overlap=wLength-wInc, end='pad')
-            energy[i,j,:] = np.sum((w*mod_out_frame[:n_frames])**2, axis=1)
 
-    if norm:
-        energy = normalize_energy(energy)
+        n_frames = int(1 + (gt_env.shape[1] - wLength)//wInc)
+        w = hamming(wLength+1)[:-1] # window is periodic, not symmetric
 
-    erbs = np.flipud(calc_erbs(low_freq, fs, n_cochlear_filters))
+        energy = np.zeros((n_cochlear_filters, 8, n_frames))
+        for i, ac_ch in enumerate(gt_env):
+            mod_out = modfilt(MF, ac_ch)
+            for j, mod_ch in enumerate(mod_out):
+                mod_out_frame = segment_axis(mod_ch, wLength, overlap=wLength-wInc, end='pad')
+                energy[i,j,:] = np.sum((w*mod_out_frame[:n_frames])**2, axis=1)
 
-    frame_energy = np.einsum('ijk->kij', energy)
-    avg_energy = np.mean(energy, axis=2)
-    total_energy = np.sum(avg_energy)
+        if norm:
+            energy = normalize_energy(energy)
 
-    AC_energy = np.sum(avg_energy, axis=1)
-    AC_perc = AC_energy*100/total_energy
+        erbs = np.flipud(calc_erbs(low_freq, fs, n_cochlear_filters))
 
-    AC_perc_cumsum=np.cumsum(np.flipud(AC_perc))
-    K90perc_idx = np.where(AC_perc_cumsum>90)[0][0]
+        frame_energy = np.einsum('ijk->kij', energy)
+        avg_energy = np.mean(energy, axis=2)
+        total_energy = np.sum(avg_energy)
 
-    BW = erbs[K90perc_idx]
+        AC_energy = np.sum(avg_energy, axis=1)
+        AC_perc = AC_energy*100/total_energy
 
-    cutoffs = calc_cutoffs(mod_filter_cfs, fs, 2)[0]
+        AC_perc_cumsum=np.cumsum(np.flipud(AC_perc))
+        K90perc_idx = np.where(AC_perc_cumsum>90)[0][0]
 
-    if (BW > cutoffs[4]) and (BW < cutoffs[5]):
-        Kstar=5
-    elif (BW > cutoffs[5]) and (BW < cutoffs[6]):
-        Kstar=6
-    elif (BW > cutoffs[6]) and (BW < cutoffs[7]):
-        Kstar=7
-    elif (BW > cutoffs[7]):
-        Kstar=8
+        BW = erbs[K90perc_idx]
 
-    return np.sum(avg_energy[:, :4])/np.sum(avg_energy[:, 4:Kstar]), np.sum(frame_energy[:, :, :4], axis=-1).sum(axis=-1)/np.sum(frame_energy[:, :, 4:Kstar], axis=-1).sum(axis=-1)
+        cutoffs = calc_cutoffs(mod_filter_cfs, fs, 2)[0]
+
+        if (BW > cutoffs[4]) and (BW < cutoffs[5]):
+            Kstar=5
+        elif (BW > cutoffs[5]) and (BW < cutoffs[6]):
+            Kstar=6
+        elif (BW > cutoffs[6]) and (BW < cutoffs[7]):
+            Kstar=7
+        elif (BW > cutoffs[7]):
+            Kstar=8
+
+        return np.sum(avg_energy[:, :4])/np.sum(avg_energy[:, 4:Kstar]), np.sum(frame_energy[:, :, :4], axis=-1).sum(axis=-1)/np.sum(frame_energy[:, :, 4:Kstar], axis=-1).sum(axis=-1)
 
 def process_file(f, args):
     fs, s = readwav(f)
