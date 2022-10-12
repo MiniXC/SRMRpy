@@ -38,7 +38,9 @@ def normalize_energy(energy, drange=30.0):
     energy[energy > peak_energy] = peak_energy
     return energy
 
-def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False, wLength=1024, wInc=256):
+def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=True, norm=False):
+    wLengthS = .256
+    wIncS = .064
     # Computing gammatone envelopes
     if fast:
         mfs = 400.0
@@ -48,6 +50,9 @@ def srmr(x, fs, n_cochlear_filters=23, low_freq=125, min_cf=4, max_cf=128, fast=
         fcoefs = make_erb_filters(fs, cfs)
         gt_env = np.abs(hilbert(erb_filterbank(x, fcoefs)))
         mfs = fs
+        
+    wLength = int(np.ceil(wLengthS*mfs))
+    wInc = int(np.ceil(wIncS*mfs))
 
     # Computing modulation filterbank with Q = 2 and 8 channels
     mod_filter_cfs = compute_modulation_cfs(min_cf, max_cf, 8)
