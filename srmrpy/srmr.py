@@ -55,7 +55,7 @@ class SRMR():
         self.norm = norm
         self.gm = Gammatonegram(n_bins=n_cochlear_filters, sr=fs, n_fft=int(n_fft/(win_length/hop_length)), hop_length=hop_length, fmin=low_freq, fmax=fs/2, power=1, norm=1, center=False)
 
-    def srmr(x):
+    def srmr(self, x):
         # previous args
         fs=self.fs
         n_cochlear_filters=self.n_cochlear_filters
