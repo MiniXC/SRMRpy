@@ -66,7 +66,7 @@ class SRMR():
         faster=self.faster
         norm=self.norm
         
-        wLengthS = .256
+        wLengthS = .128
         wIncS = .064
         # Computing gammatone envelopes
         if fast and not faster:
